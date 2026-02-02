@@ -1,0 +1,175 @@
+# =============================================================================
+# GitHub Actions - Build OBS Plugin (Linux + Windows)
+# =============================================================================
+# Ce workflow compile automatiquement le plugin pour Linux et Windows
+# à chaque push ou pull request.
+#
+# Les artifacts (fichiers compilés) sont téléchargeables depuis l'onglet
+# "Actions" de GitHub, dans les détails du workflow run.
+# =============================================================================
+
+name: Build OBS Plugin
+
+on:
+  push:
+    branches: [main, master]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  PLUGIN_NAME: obs-counter-dock
+  OBS_VERSION: "30.0.2"
+
+jobs:
+  # ===========================================================================
+  # Build Linux
+  # ===========================================================================
+  build-linux:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            g++ \
+            libobs-dev \
+            qtbase5-dev \
+            pkg-config
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p artifact/obs-counter-dock/bin/64bit
+          cp build/libobs-counter-dock.so artifact/obs-counter-dock/bin/64bit/
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-counter-dock-linux
+          path: artifact/
+
+  # ===========================================================================
+  # Build Windows
+  # ===========================================================================
+  build-windows:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # Installation de Qt5
+      # -----------------------------------------------------------------------
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '5.15.2'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2019_64'
+          cache: true
+
+      # -----------------------------------------------------------------------
+      # Téléchargement des sources OBS (pour les headers)
+      # -----------------------------------------------------------------------
+      - name: Download OBS sources
+        run: |
+          Invoke-WebRequest `
+            -Uri "https://github.com/obsproject/obs-studio/archive/refs/tags/${{ env.OBS_VERSION }}.zip" `
+            -OutFile obs-src.zip
+          Expand-Archive -Path obs-src.zip -DestinationPath .
+          Rename-Item "obs-studio-${{ env.OBS_VERSION }}" obs-studio
+
+      # -----------------------------------------------------------------------
+      # Téléchargement des binaires OBS (pour les .lib)
+      # OBS fournit des builds Windows avec les fichiers .lib inclus
+      # -----------------------------------------------------------------------
+      - name: Download OBS binaries
+        run: |
+          # Télécharge la version Windows d'OBS
+          Invoke-WebRequest `
+            -Uri "https://github.com/obsproject/obs-studio/releases/download/${{ env.OBS_VERSION }}/OBS-Studio-${{ env.OBS_VERSION }}-Windows.zip" `
+            -OutFile obs-windows.zip
+          Expand-Archive -Path obs-windows.zip -DestinationPath obs-install
+
+      # -----------------------------------------------------------------------
+      # Configuration et compilation
+      # -----------------------------------------------------------------------
+      - name: Configure CMake
+        run: |
+          cmake -B build `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR" `
+            -DOBS_SOURCE_DIR="${{ github.workspace }}/obs-studio" `
+            -DOBS_LIB_DIR="${{ github.workspace }}/obs-install/bin/64bit"
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      # -----------------------------------------------------------------------
+      # Préparation de l'artifact
+      # -----------------------------------------------------------------------
+      - name: Prepare artifact
+        run: |
+          New-Item -ItemType Directory -Force -Path artifact/obs-counter-dock/bin/64bit
+
+          # Copie le .dll depuis le dossier Release
+          $dllPath = Get-ChildItem -Path build -Recurse -Filter "*.dll" | Select-Object -First 1
+          if ($dllPath) {
+            Copy-Item $dllPath.FullName artifact/obs-counter-dock/bin/64bit/
+            Write-Host "DLL found and copied: $($dllPath.FullName)"
+          } else {
+            Write-Host "Warning: No DLL found!"
+            Get-ChildItem -Path build -Recurse | ForEach-Object { Write-Host $_.FullName }
+          }
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-counter-dock-windows
+          path: artifact/
+
+  # ===========================================================================
+  # Création d'une release (uniquement sur tag)
+  # ===========================================================================
+  release:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create zip archives
+        run: |
+          cd obs-counter-dock-linux
+          zip -r ../obs-counter-dock-linux.zip .
+          cd ../obs-counter-dock-windows
+          zip -r ../obs-counter-dock-windows.zip .
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            obs-counter-dock-linux.zip
+            obs-counter-dock-windows.zip
+          generate_release_notes: true
