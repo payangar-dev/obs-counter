@@ -95,29 +95,37 @@ jobs:
           Rename-Item "obs-studio-${{ env.OBS_VERSION }}" obs-studio
 
       # -----------------------------------------------------------------------
-      # Téléchargement des binaires OBS (pour les .lib)
-      # OBS fournit des builds Windows avec les fichiers .lib inclus
+      # Téléchargement OBS portable (contient les .lib dans bin/64bit)
       # -----------------------------------------------------------------------
-      - name: Download OBS binaries
+      - name: Download OBS portable
         run: |
-          # Télécharge la version Windows d'OBS
+          # Le zip portable contient une installation complète avec les .lib
           Invoke-WebRequest `
-            -Uri "https://github.com/obsproject/obs-studio/releases/download/${{ env.OBS_VERSION }}/OBS-Studio-${{ env.OBS_VERSION }}-Windows.zip" `
-            -OutFile obs-windows.zip
-          Expand-Archive -Path obs-windows.zip -DestinationPath obs-install
+            -Uri "https://github.com/obsproject/obs-studio/releases/download/${{ env.OBS_VERSION }}/OBS-Studio-${{ env.OBS_VERSION }}.zip" `
+            -OutFile obs-portable.zip
+          Expand-Archive -Path obs-portable.zip -DestinationPath obs-install
+
+          # Affiche le contenu pour debug
+          Write-Host "=== Contenu de obs-install ==="
+          Get-ChildItem -Path obs-install -Recurse -Include "*.lib","*.dll" | Select-Object -First 20 | ForEach-Object { Write-Host $_.FullName }
 
       # -----------------------------------------------------------------------
       # Configuration et compilation
       # -----------------------------------------------------------------------
       - name: Configure CMake
         run: |
+          # Trouver le dossier bin/64bit dans l'extraction
+          $obsDir = Get-ChildItem -Path obs-install -Directory | Select-Object -First 1
+          $libDir = "${{ github.workspace }}/obs-install/$($obsDir.Name)/bin/64bit"
+          Write-Host "OBS lib dir: $libDir"
+
           cmake -B build `
             -G "Visual Studio 17 2022" `
             -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR" `
             -DOBS_SOURCE_DIR="${{ github.workspace }}/obs-studio" `
-            -DOBS_LIB_DIR="${{ github.workspace }}/obs-install/bin/64bit"
+            -DOBS_LIB_DIR="$libDir"
 
       - name: Build
         run: cmake --build build --config Release
