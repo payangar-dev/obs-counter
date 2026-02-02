@@ -176,6 +176,10 @@ jobs:
           Write-Host "Contents:"
           Get-ChildItem -Path $libDir -Filter "*.lib" | ForEach-Object { Write-Host $_.FullName }
 
+          # Debug: show OBS source structure for frontend API
+          Write-Host "=== OBS Frontend API location ==="
+          Get-ChildItem -Path "${{ github.workspace }}/obs-studio/UI" -Recurse -Filter "*.h" -Depth 2 | ForEach-Object { Write-Host $_.FullName }
+
           cmake -B build `
             -G "Visual Studio 17 2022" `
             -A x64 `
