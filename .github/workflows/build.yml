@@ -95,6 +95,36 @@ jobs:
           Rename-Item "obs-studio-${{ env.OBS_VERSION }}" obs-studio
 
       # -----------------------------------------------------------------------
+      # Génération de obsconfig.h (normalement généré par CMake d'OBS)
+      # -----------------------------------------------------------------------
+      - name: Generate obsconfig.h
+        run: |
+          $version = "${{ env.OBS_VERSION }}"
+          $parts = $version.Split('.')
+          $major = $parts[0]
+          $minor = $parts[1]
+          $patch = $parts[2]
+
+          $config = @"
+          #pragma once
+          #define OBS_VERSION "$version"
+          #define OBS_VERSION_MAJOR $major
+          #define OBS_VERSION_MINOR $minor
+          #define OBS_VERSION_PATCH $patch
+          #define OBS_VERSION_CANONICAL "$version"
+          #define OBS_COMMIT ""
+          #define OBS_RELEASE_CANDIDATE 0
+          #define OBS_RELEASE_CANDIDATE_MAJOR 0
+          #define OBS_RELEASE_CANDIDATE_MINOR 0
+          #define OBS_BETA 0
+          #define OBS_BETA_MAJOR 0
+          #define OBS_BETA_MINOR 0
+          "@
+
+          Set-Content -Path "obs-studio/libobs/obsconfig.h" -Value $config
+          Write-Host "Generated obsconfig.h for OBS $version"
+
+      # -----------------------------------------------------------------------
       # Téléchargement OBS portable et génération des .lib
       # -----------------------------------------------------------------------
       - name: Download OBS portable
