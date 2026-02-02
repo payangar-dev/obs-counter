@@ -73,9 +73,10 @@ elseif(WIN32)
     endif()
 
     # Chemins d'inclusion - où trouver les headers OBS
+    # Note: OBS 32+ a déplacé l'API frontend de UI/obs-frontend-api/ vers frontend/api/
     set(OBS_INCLUDES
         "${OBS_SOURCE_DIR}/libobs"
-        "${OBS_SOURCE_DIR}/UI/obs-frontend-api"
+        "${OBS_SOURCE_DIR}/frontend/api"
     )
 
     # Bibliothèques à lier
