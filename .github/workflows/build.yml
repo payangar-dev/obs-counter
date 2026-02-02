@@ -95,29 +95,52 @@ jobs:
           Rename-Item "obs-studio-${{ env.OBS_VERSION }}" obs-studio
 
       # -----------------------------------------------------------------------
-      # Téléchargement OBS portable (contient les .lib dans bin/64bit)
+      # Téléchargement OBS portable et génération des .lib
       # -----------------------------------------------------------------------
       - name: Download OBS portable
         run: |
-          # Le zip portable contient une installation complète avec les .lib
           Invoke-WebRequest `
             -Uri "https://github.com/obsproject/obs-studio/releases/download/${{ env.OBS_VERSION }}/OBS-Studio-${{ env.OBS_VERSION }}.zip" `
             -OutFile obs-portable.zip
           Expand-Archive -Path obs-portable.zip -DestinationPath obs-install
 
-          # Affiche le contenu pour debug
-          Write-Host "=== Contenu de obs-install ==="
-          Get-ChildItem -Path obs-install -Recurse -Include "*.lib","*.dll" | Select-Object -First 20 | ForEach-Object { Write-Host $_.FullName }
+          # Affiche la structure pour debug
+          Write-Host "=== Structure obs-install ==="
+          Get-ChildItem -Path obs-install -Recurse -Depth 2 | ForEach-Object { Write-Host $_.FullName }
+
+      - name: Generate .lib files from .dll
+        shell: cmd
+        run: |
+          @echo off
+          REM Les .lib ne sont pas distribués par OBS, on les génère à partir des .dll
+          REM en utilisant les outils Visual Studio (dumpbin + lib)
+
+          cd obs-install\bin\64bit
+
+          REM Génère obs.lib
+          echo LIBRARY obs.dll > obs.def
+          echo EXPORTS >> obs.def
+          for /f "tokens=4" %%a in ('dumpbin /exports obs.dll ^| findstr /r "^[ ]*[0-9]"') do echo %%a >> obs.def
+          lib /def:obs.def /out:obs.lib /machine:x64
+
+          REM Génère obs-frontend-api.lib
+          echo LIBRARY obs-frontend-api.dll > obs-frontend-api.def
+          echo EXPORTS >> obs-frontend-api.def
+          for /f "tokens=4" %%a in ('dumpbin /exports obs-frontend-api.dll ^| findstr /r "^[ ]*[0-9]"') do echo %%a >> obs-frontend-api.def
+          lib /def:obs-frontend-api.def /out:obs-frontend-api.lib /machine:x64
+
+          echo === Generated .lib files ===
+          dir *.lib
 
       # -----------------------------------------------------------------------
       # Configuration et compilation
       # -----------------------------------------------------------------------
       - name: Configure CMake
         run: |
-          # Trouver le dossier bin/64bit dans l'extraction
-          $obsDir = Get-ChildItem -Path obs-install -Directory | Select-Object -First 1
-          $libDir = "${{ github.workspace }}/obs-install/$($obsDir.Name)/bin/64bit"
+          $libDir = "${{ github.workspace }}/obs-install/bin/64bit"
           Write-Host "OBS lib dir: $libDir"
+          Write-Host "Contents:"
+          Get-ChildItem -Path $libDir -Filter "*.lib" | ForEach-Object { Write-Host $_.FullName }
 
           cmake -B build `
             -G "Visual Studio 17 2022" `

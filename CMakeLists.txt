@@ -155,7 +155,8 @@ elseif(WIN32)
     # Windows : installe dans %APPDATA%/obs-studio/plugins/
     set(OBS_PLUGIN_DIR "$ENV{APPDATA}/obs-studio/plugins/${PROJECT_NAME}/bin/64bit")
 
+    # Pour un MODULE (plugin), CMake utilise LIBRARY même sur Windows
     install(TARGETS ${PROJECT_NAME}
-        RUNTIME DESTINATION ${OBS_PLUGIN_DIR}
+        LIBRARY DESTINATION ${OBS_PLUGIN_DIR}
     )
 endif()
