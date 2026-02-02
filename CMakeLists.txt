@@ -27,9 +27,10 @@ set(CMAKE_AUTORCC ON)
 # Recherche des dépendances
 # =============================================================================
 
-# Trouve Qt5 Widgets (pour l'interface graphique du dock)
-# Qt5 fonctionne de la même manière sur Linux et Windows avec find_package
-find_package(Qt5 REQUIRED COMPONENTS Widgets)
+# Trouve Qt6 Widgets (pour l'interface graphique du dock)
+# Qt6 fonctionne de la même manière sur Linux et Windows avec find_package
+# Note: OBS 32+ nécessite Qt6 (Qt5 n'est plus supporté)
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
 # -----------------------------------------------------------------------------
 # OBS - Différent selon la plateforme
@@ -114,7 +115,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # Lie les bibliothèques nécessaires au plugin
 target_link_libraries(${PROJECT_NAME} PRIVATE
     ${OBS_LIBS}
-    Qt5::Widgets
+    Qt6::Widgets
 )
 
 # Options spécifiques à la plateforme

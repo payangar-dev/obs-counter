@@ -21,7 +21,7 @@ on:
 
 env:
   PLUGIN_NAME: obs-counter-dock
-  OBS_VERSION: "30.0.2"
+  OBS_VERSION: "32.0.4"
 
 jobs:
   # ===========================================================================
@@ -41,7 +41,7 @@ jobs:
             cmake \
             g++ \
             libobs-dev \
-            qtbase5-dev \
+            qt6-base-dev \
             pkg-config
 
       - name: Configure CMake
@@ -72,15 +72,15 @@ jobs:
         uses: actions/checkout@v4
 
       # -----------------------------------------------------------------------
-      # Installation de Qt5
+      # Installation de Qt6
       # -----------------------------------------------------------------------
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '5.15.2'
+          version: '6.7.2'
           host: 'windows'
           target: 'desktop'
-          arch: 'win64_msvc2019_64'
+          arch: 'win64_msvc2022_64'
           cache: true
 
       # -----------------------------------------------------------------------
@@ -99,8 +99,9 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Download OBS portable
         run: |
+          # OBS 32+ utilise un format de nom différent pour les releases Windows
           Invoke-WebRequest `
-            -Uri "https://github.com/obsproject/obs-studio/releases/download/${{ env.OBS_VERSION }}/OBS-Studio-${{ env.OBS_VERSION }}.zip" `
+            -Uri "https://github.com/obsproject/obs-studio/releases/download/${{ env.OBS_VERSION }}/OBS-Studio-${{ env.OBS_VERSION }}-Windows-x64.zip" `
             -OutFile obs-portable.zip
           Expand-Archive -Path obs-portable.zip -DestinationPath obs-install
 
@@ -157,7 +158,7 @@ jobs:
         run: cmake --build build --config Release
 
       # -----------------------------------------------------------------------
-      # Préparation de l'artifact
+      # Préparation de l'artifact (ZIP)
       # -----------------------------------------------------------------------
       - name: Prepare artifact
         run: |
@@ -172,6 +173,28 @@ jobs:
             Write-Host "Warning: No DLL found!"
             Get-ChildItem -Path build -Recurse | ForEach-Object { Write-Host $_.FullName }
           }
+
+      # -----------------------------------------------------------------------
+      # Création de l'installateur NSIS
+      # -----------------------------------------------------------------------
+      - name: Install NSIS
+        run: |
+          choco install nsis -y
+
+      - name: Build NSIS installer
+        run: |
+          # Copie le DLL dans le dossier du script NSIS
+          $dllPath = Get-ChildItem -Path build -Recurse -Filter "*.dll" | Select-Object -First 1
+          if ($dllPath) {
+            Copy-Item $dllPath.FullName installer/windows/obs-counter-dock.dll
+          }
+
+          # Compile l'installateur
+          cd installer/windows
+          & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+
+          # Déplace l'installateur vers le dossier artifact
+          Move-Item obs-counter-dock-installer.exe ../../artifact/
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -198,6 +221,8 @@ jobs:
           cd obs-counter-dock-linux
           zip -r ../obs-counter-dock-linux.zip .
           cd ../obs-counter-dock-windows
+          # L'installateur est déjà un exe, on le garde séparé
+          mv obs-counter-dock-installer.exe ../
           zip -r ../obs-counter-dock-windows.zip .
 
       - name: Create Release
@@ -206,4 +231,5 @@ jobs:
           files: |
             obs-counter-dock-linux.zip
             obs-counter-dock-windows.zip
+            obs-counter-dock-installer.exe
           generate_release_notes: true
